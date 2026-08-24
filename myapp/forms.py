@@ -1,6 +1,6 @@
 # 📍 File: myapp/forms.py
 from django import forms
-from .models import Employee
+from .models import Employee, SalaryStructure
 
 DEPARTMENT_CHOICES = [
     ('Engineering', 'Engineering'),
@@ -57,3 +57,15 @@ class EmployeeForm(forms.ModelForm):
         if salary is not None and salary < 0:
             raise forms.ValidationError("Salary cannot be negative.")
         return salary
+
+
+class SalaryStructureForm(forms.ModelForm):
+    class Meta:
+        model = SalaryStructure
+        fields = ['basic', 'hra', 'allowances', 'deductions']
+        widgets = {
+            'basic': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '0.01'}),
+            'hra': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '0.01'}),
+            'allowances': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '0.01'}),
+            'deductions': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '0.01'}),
+        }

@@ -12,6 +12,6 @@ def create_profile_for_new_user(sender, instance, created, **kwargs):
     Automatically creates a Profile when a new User is created.
     Superusers get 'admin' role, normal users get 'emp'.
     """
-    if created and not hasattr(instance, 'profile'):
+    if created:
         role = 'admin' if instance.is_superuser else 'emp'
-        Profile.objects.create(user=instance, role=role)
+        Profile.objects.get_or_create(user=instance, defaults={'role': role})

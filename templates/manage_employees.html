@@ -3,14 +3,14 @@
 {% block content %}
 <h3 class="mb-3">Manage Employees</h3>
 <table class="table table-striped">
-    <thead><tr><th>Name</th><th>Dept</th><th>Job</th><th>Email</th></tr></thead>
+    <thead><tr><th>Name</th><th>Department</th><th>Position</th><th>Status</th></tr></thead>
     <tbody>
         {% for emp in employees %}
         <tr>
-        <td>{{ emp.user.get_full_name }}</td>
+        <td>{{ emp.full_name }}</td>
         <td>{{ emp.department }}</td>
-        <td>{{ emp.job_title }}</td>
-        <td>{{ emp.user.email }}</td>
+        <td>{{ emp.position }}</td>
+        <td>{{ emp.status }}</td>
         </tr>
         {% endfor %}
     </tbody>

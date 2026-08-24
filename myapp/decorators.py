@@ -16,7 +16,7 @@ def role_required(allowed_roles):
         def wrapper(request, *args, **kwargs):
             try:
                 profile = request.user.profile
-                if profile.role in allowed_roles:
+                if request.user.is_superuser or profile.role in allowed_roles:
                     return view_func(request, *args, **kwargs)
                 return HttpResponseForbidden("🔒 You do not have permission to access this page.")
             except Profile.DoesNotExist:

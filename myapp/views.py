@@ -1,10 +1,14 @@
+from decimal import Decimal, InvalidOperation
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth import login, logout
 from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
@@ -39,6 +43,14 @@ def register_emp_view(request):
             messages.error(request, "⚠️ Username is not allowed or already taken.")
             return redirect('register')
 
+        # Validate password strength
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            for error in e.messages:
+                messages.error(request, error)
+            return redirect('register')
+
         user = User.objects.create_user(username=username, password=password)
         Profile.objects.update_or_create(user=user, defaults={'role': role})
 
@@ -48,8 +60,8 @@ def register_emp_view(request):
         user.save()
 
         full_name = user.get_full_name().strip()
-        Employee.objects.get_or_create(
-            full_name__iexact=full_name,
+        emp, created = Employee.objects.get_or_create(
+            user=user,
             defaults={'full_name': full_name, 'position': 'Support', 'salary': 25000, 'status': 'active'}
         )
 
@@ -58,9 +70,13 @@ def register_emp_view(request):
 
     return render(request, 'registration/register_emp.html')
 
-
-# HR Registration
+# HR Registration (Admin only)
+@login_required
 def register_hr_view(request):
+    if request.user.profile.role not in ['admin']:
+        messages.error(request, "⚠️ Only admins can create HR accounts.")
+        return redirect('dashboard')
+
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
@@ -68,6 +84,14 @@ def register_hr_view(request):
 
         if username.lower() in RESERVED_USERNAMES or User.objects.filter(username__iexact=username).exists():
             messages.error(request, "⚠️ Username is not allowed or already taken.")
+            return redirect('register_hr')
+
+        # Validate password strength
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            for error in e.messages:
+                messages.error(request, error)
             return redirect('register_hr')
 
         user = User.objects.create_user(username=username, password=password)
@@ -117,8 +141,7 @@ def employee_salary_view(request):
         messages.error(request, "Only employees can access this page.")
         return redirect('dashboard')
 
-    full_name = request.user.get_full_name().strip()
-    employee = get_object_or_404(Employee, full_name__iexact=full_name)
+    employee = get_object_or_404(Employee, user=request.user)
     
     # Get the latest salary structure
     salary_structure = SalaryStructure.objects.filter(employee=employee).order_by('-id').first()
@@ -181,11 +204,11 @@ def dashboard_view(request):
         context["dashboard_cards"] = dashboard_cards
 
     elif role == 'emp':
-        full_name = request.user.get_full_name().strip()
-        emp, _ = Employee.objects.get_or_create(
-            full_name__iexact=full_name,
-            defaults={'full_name': full_name, 'position': 'Support', 'salary': 25000, 'status': 'active'}
-        )
+        try:
+            emp = Employee.objects.get(user=request.user)
+        except Employee.DoesNotExist:
+            messages.error(request, "No employee profile linked to your account. Contact HR.")
+            return redirect('select_role')
 
         context.update({
             'salary': SalaryStructure.objects.filter(employee=emp).last(),
@@ -206,7 +229,7 @@ def preview_payslip(request, payroll_id):
     payroll = get_object_or_404(Payroll, id=payroll_id)
     role = request.user.profile.role
 
-    if role in ['admin', 'hr'] or payroll.structure.employee.full_name == request.user.get_full_name():
+    if role in ['admin', 'hr'] or payroll.structure.employee.user == request.user:
         return render(request, 'payslip.html', {
             'payroll': payroll,
             'now': timezone.now(),
@@ -216,14 +239,18 @@ def preview_payslip(request, payroll_id):
 
 
 # Update Salary Structure
+@role_required(['admin', 'hr'])
 @require_POST
-@login_required
 def update_salary_structure(request):
     struct = get_object_or_404(SalaryStructure, id=request.POST.get('structure_id'))
-    struct.basic = float(request.POST.get('basic', 0))
-    struct.hra = float(request.POST.get('hra', 0))
-    struct.allowances = float(request.POST.get('allowances', 0))
-    struct.deductions = float(request.POST.get('deductions', 0))
+    try:
+        struct.basic = Decimal(request.POST.get('basic', '0'))
+        struct.hra = Decimal(request.POST.get('hra', '0'))
+        struct.allowances = Decimal(request.POST.get('allowances', '0'))
+        struct.deductions = Decimal(request.POST.get('deductions', '0'))
+    except (InvalidOperation, ValueError):
+        messages.error(request, "❌ Invalid salary values provided.")
+        return redirect('dashboard')
     struct.save()
 
     Payroll.objects.filter(structure=struct).update(net_salary=struct.net_salary)
@@ -233,7 +260,8 @@ def update_salary_structure(request):
 
 
 # Mark Payroll as Paid
-@role_required(['hr'])
+@role_required(['admin', 'hr'])
+@require_POST
 def mark_payroll_paid(request, payroll_id):
     payroll = get_object_or_404(Payroll, id=payroll_id)
     employee_name = payroll.structure.employee.full_name
@@ -256,7 +284,7 @@ def manage_employees(request):
     })
 
 
-@user_passes_test(lambda u: u.is_superuser or u.profile.role in ['admin', 'hr'])
+@role_required(['admin', 'hr'])
 def add_employee(request):
     form = EmployeeForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -266,7 +294,7 @@ def add_employee(request):
     return render(request, 'employees/add_employee.html', {'form': form})
 
 
-@user_passes_test(lambda u: u.is_superuser or u.profile.role in ['admin', 'hr'])
+@role_required(['admin', 'hr'])
 def edit_employee(request, emp_id):
     emp = get_object_or_404(Employee, id=emp_id)
     form = EmployeeForm(request.POST or None, instance=emp)
@@ -277,7 +305,7 @@ def edit_employee(request, emp_id):
     return render(request, 'employees/edit_employee.html', {'form': form})
 
 
-@user_passes_test(lambda u: u.is_superuser or u.profile.role in ['admin', 'hr'])
+@role_required(['admin', 'hr'])
 def delete_employee(request, emp_id):
     emp = get_object_or_404(Employee, id=emp_id)
     if request.method == 'POST':

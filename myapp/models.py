@@ -38,6 +38,7 @@ class Employee(models.Model):
         ('inactive', 'Inactive'),
     )
 
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='employee')
     full_name = models.CharField(max_length=100)
     position = models.CharField(max_length=100)
     department = models.CharField(max_length=100, default="General")
@@ -63,7 +64,7 @@ class SalaryStructure(models.Model):
         verbose_name_plural = "Salary Structures"
 
     def __str__(self):
-        return f"{self.employee} – Net ₹{self.net_salary():.2f}"
+        return f"{self.employee} – Net ₹{self.net_salary:.2f}"
 
     @property
     def gross_salary(self):
@@ -74,9 +75,13 @@ class SalaryStructure(models.Model):
         return self.gross_salary - self.deductions
 
 
+def _get_current_month():
+    return now().strftime("%Y-%m")
+
+
 class Payroll(models.Model):
     structure = models.ForeignKey(SalaryStructure, on_delete=models.CASCADE, related_name='payrolls')
-    month = models.CharField(max_length=7, default=now().strftime("%Y-%m"))
+    month = models.CharField(max_length=7, default=_get_current_month)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
     is_paid = models.BooleanField(default=False)
     payslip_pdf = models.FileField(upload_to='payslips/', blank=True, null=True)
@@ -85,6 +90,7 @@ class Payroll(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = "Payrolls"
+        unique_together = [('structure', 'month')]
 
     def __str__(self):
         status = "Paid" if self.is_paid else "Unpaid"

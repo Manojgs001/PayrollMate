@@ -78,6 +78,7 @@ class Command(BaseCommand):
             salary = random.randint(min_sal, max_sal)
 
             emp = Employee.objects.create(
+                user=user,
                 full_name=f"{first} {last}",
                 position=position,
                 department=department,

@@ -5,7 +5,7 @@
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h6 class="mb-0 d-flex align-items-center gap-2">
         Employee Directory
-        {% comment %} <span id="employeeCount" class="badge bg-primary rounded-pill">0</span> {% endcomment %}
+        <span id="employeeCount" class="badge bg-primary rounded-pill">0</span>
         </h6>
         {% if role == 'admin' or role == 'hr' %}
         <a href="{% url 'add_employee' %}" class="btn btn-sm btn-success">+ Add Employee</a>
@@ -115,6 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
         let count = 0;
 
         rows.forEach(row => {
+        if (row.cells.length < 4) return;
         const nameText = row.cells[0].textContent.trim().toUpperCase();
         const positionText = row.cells[1].textContent.trim().toUpperCase();
         const deptText = row.cells[3].textContent.trim().toUpperCase();

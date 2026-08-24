@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Dashboard | Payroll Manager{% endblock %}
 
+{% block tab_navigation %}
+{% if role == 'admin' or role == 'hr' %}
+<div class="bg-white border-bottom px-4 pt-3">
+    <ul class="nav nav-tabs" id="dashboard-tabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-dashboard">📊 Dashboard</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-employees">👥 Employees</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-salary">💰 Salary Structures</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-payrolls">🧾 Payrolls</button>
+    </li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <!-- 🧭 Tab Content Start -->
 <div class="tab-pane fade show active" id="tab-dashboard" role="tabpanel">
@@ -171,8 +192,16 @@
         </div>
         <ul class="list-group list-group-flush">
             {% for pay in payrolls %}
-            <li class="list-group-item">
-            {{ pay.month }} — ₹{{ pay.net_salary }} — {{ pay.is_paid|yesno:"Paid,Unpaid" }}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>
+                {{ pay.month }} — <strong>₹{{ pay.net_salary }}</strong> — 
+                {% if pay.is_paid %}
+                    <span class="badge bg-success rounded-pill">Paid</span>
+                {% else %}
+                    <span class="badge bg-secondary rounded-pill">Unpaid</span>
+                {% endif %}
+            </span>
+            <a href="{% url 'preview_payslip' pay.id %}" class="btn btn-sm btn-outline-primary" target="_blank">View Payslip</a>
             </li>
             {% empty %}
             <li class="list-group-item text-muted">No payroll records found.</li>
@@ -184,16 +213,18 @@
     {% endif %}
     </div> <!-- closes tab-dashboard -->
 
-    <!-- 📂 Tab Panels for Other Pages -->
+    <!-- 📂 Tab Panels for Other Pages (Admin/HR only) -->
+    {% if role == 'admin' or role == 'hr' %}
     <div class="tab-pane fade" id="tab-employees" role="tabpanel">
     {% include 'partials/employee_list.html' %}
     </div>
     <div class="tab-pane fade" id="tab-salary" role="tabpanel">
-    {% include 'partials/salary_stucture.html' %}
+    {% include 'partials/salary_structure.html' %}
     </div>
     <div class="tab-pane fade" id="tab-payrolls" role="tabpanel">
     {% include 'partials/payroll_list.html' %}
     </div>
+    {% endif %}
     {% endblock %}
 
     <!-- ✅ Toast Container for Feedback -->
@@ -252,8 +283,11 @@
     const rows = Array.from(table?.rows || []).slice(1); // skip header
     const tbody = table.querySelector("tbody");
     const sorted = rows.sort((a, b) => {
-        const A = a.cells[columnIndex].innerText.toLowerCase();
-        const B = b.cells[columnIndex].innerText.toLowerCase();
+        const A = a.cells[columnIndex].innerText.replace(/[₹,\s]/g, '').toLowerCase();
+        const B = b.cells[columnIndex].innerText.replace(/[₹,\s]/g, '').toLowerCase();
+        const numA = parseFloat(A);
+        const numB = parseFloat(B);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
         return A.localeCompare(B);
     });
     sorted.forEach(row => tbody.appendChild(row));
